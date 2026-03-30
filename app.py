@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from pathlib import Path
 from datetime import datetime
-s
+
 st.set_page_config(
     page_title="Hope & Sarah's Recipe Box",
     page_icon="📖",
