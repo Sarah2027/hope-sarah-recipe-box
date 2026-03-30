@@ -29,6 +29,7 @@ COLUMNS = [
     "source_link",
 ]
 
+
 def init_data() -> pd.DataFrame:
     if DATA_FILE.exists():
         df = pd.read_csv(DATA_FILE)
