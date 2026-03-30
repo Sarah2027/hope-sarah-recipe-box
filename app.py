@@ -1,7 +1,9 @@
-import streamlit as st
-import pandas as pd
-from pathlib import Path
+import shutil
 from datetime import datetime
+from pathlib import Path
+
+import pandas as pd
+import streamlit as st
 
 st.set_page_config(
     page_title="Hope & Sarah's Recipe Box",
@@ -11,138 +13,81 @@ st.set_page_config(
 )
 
 APP_TITLE = "Hope & Sarah's Recipe Box"
-APP_TAGLINE = "Your personal collection of plant-based recipes, all in one place."
+APP_TAGLINE = "Plant-based recipes for everyone to enjoy."
 BASE_DIR = Path(__file__).parent
-DATA_FILE = BASE_DIR / "recipes.csv"
-LOGO_FILE = BASE_DIR / "assets" / "logo.png"
+DATA_DIR = BASE_DIR / "data"
+DATA_FILE = DATA_DIR / "recipes.csv"
+BACKUP_DIR = DATA_DIR / "backups"
 
-COLUMNS = [
-    "id",
-    "date_added",
+RECIPE_COLUMNS = [
     "recipe_name",
+    "category",
+    "prep_time",
     "ingredients",
     "instructions",
     "notes",
     "favorite",
-    "category",
-    "prep_time",
     "source_link",
+    "rating",
+    "tags",
+]
+
+DEFAULT_TAGS = [
+    "asian",
+    "indian",
+    "italian",
+    "mexican",
+    "soup",
+    "salad",
+    "dessert",
+    "breakfast",
+    "lunch",
+    "dinner",
+    "quick",
+    "high protein",
+    "tofu",
+    "pasta",
 ]
 
 
-def init_data() -> pd.DataFrame:
-    if DATA_FILE.exists():
-        df = pd.read_csv(DATA_FILE)
-    else:
-        seed = [
-            {
-                "id": 1,
-                "date_added": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "recipe_name": "Chickpea Salad Sandwich",
-                "ingredients": "1 can chickpeas\n2 tbsp vegan mayo\n1 celery stalk, diced\n1 tbsp dill\nSalt and pepper\nBread or toast",
-                "instructions": "Mash the chickpeas, then mix with the rest of the ingredients. Serve on toasted bread.",
-                "notes": "Great for a quick lunch.",
-                "favorite": True,
-                "category": "Lunch",
-                "prep_time": "10 min",
-                "source_link": "",
-            },
-            {
-                "id": 2,
-                "date_added": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "recipe_name": "Quinoa & Veggie Stir-Fry",
-                "ingredients": "1 cup cooked quinoa\n2 cups mixed vegetables\n1 block tofu\n2 tbsp soy sauce\n1 tsp garlic\n1 tsp sesame oil",
-                "instructions": "Cook quinoa. Sauté veggies and tofu. Add quinoa and sauce, then stir until hot.",
-                "notes": "Use tamari instead of soy sauce for gluten-free.",
-                "favorite": True,
-                "category": "Dinner",
-                "prep_time": "25 min",
-                "source_link": "",
-            },
-            {
-                "id": 3,
-                "date_added": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "recipe_name": "Creamy Avocado Pasta",
-                "ingredients": "8 oz pasta\n2 ripe avocados\n2 garlic cloves\n2 tbsp lemon juice\nFresh basil\nSalt and pepper",
-                "instructions": "Blend avocado, garlic, lemon, basil, salt, and pepper. Toss with warm pasta.",
-                "notes": "Quick and easy dinner.",
-                "favorite": False,
-                "category": "Dinner",
-                "prep_time": "20 min",
-                "source_link": "",
-            },
-        ]
-        df = pd.DataFrame(seed)
-
-    for col in COLUMNS:
-        if col not in df.columns:
-            df[col] = ""
-    return df[COLUMNS].fillna("")
-
-def save_data(df: pd.DataFrame) -> None:
-    df.to_csv(DATA_FILE, index=False)
-
-def next_id(df: pd.DataFrame) -> int:
-    if df.empty:
-        return 1
-    ids = pd.to_numeric(df["id"], errors="coerce").dropna()
-    return int(ids.max()) + 1 if not ids.empty else 1
-
-def truthy(value) -> bool:
-    return str(value).strip().lower() in {"true", "1", "yes", "y"}
-
-def matches_search(row: pd.Series, query: str) -> bool:
-    if not query.strip():
-        return True
-    haystack = " ".join(
-        [
-            str(row.get("recipe_name", "")),
-            str(row.get("ingredients", "")),
-            str(row.get("instructions", "")),
-            str(row.get("notes", "")),
-            str(row.get("category", "")),
-        ]
-    ).lower()
-    return query.lower() in haystack
-
-def inject_css() -> None:
+def inject_css():
     st.markdown(
         """
         <style>
             .stApp {
-                background: linear-gradient(180deg, #f4f7fb 0%, #eef3f8 100%);
+                background: linear-gradient(180deg, #eef4fb 0%, #f7f9fc 100%);
             }
             .block-container {
-                padding-top: 1.25rem;
+                max-width: 1380px;
+                padding-top: 1rem;
                 padding-bottom: 2rem;
-                max-width: 1350px;
             }
             .hero {
-                background: rgba(255,255,255,0.85);
+                background: rgba(255,255,255,0.92);
                 border: 1px solid rgba(30,58,95,.08);
                 border-radius: 24px;
-                padding: 1.4rem 1.4rem 1rem 1.4rem;
-                box-shadow: 0 10px 28px rgba(30,58,95,.07);
+                padding: 1.2rem 1.3rem 1rem 1.3rem;
+                box-shadow: 0 12px 28px rgba(30,58,95,.07);
                 margin-bottom: 1rem;
             }
-            .search-wrap {
-                background: rgba(255,255,255,0.85);
+            .soft-panel {
+                background: rgba(255,255,255,.92);
                 border: 1px solid rgba(30,58,95,.08);
-                border-radius: 20px;
-                padding: .35rem .8rem .15rem .8rem;
+                border-radius: 18px;
                 box-shadow: 0 8px 22px rgba(30,58,95,.05);
-                margin-bottom: 1.1rem;
+                padding: .8rem .9rem .35rem .9rem;
+                margin-bottom: .9rem;
             }
             .stat-pill {
                 background: white;
                 border: 1px solid rgba(30,58,95,.08);
                 border-radius: 16px;
-                padding: .8rem 1rem;
-                box-shadow: 0 6px 18px rgba(30,58,95,.05);
+                padding: .85rem 1rem;
+                box-shadow: 0 8px 22px rgba(30,58,95,.05);
                 text-align: center;
             }
             .stat-number {
-                font-size: 1.6rem;
+                font-size: 1.55rem;
                 font-weight: 700;
                 color: #183153;
                 line-height: 1.1;
@@ -151,254 +96,428 @@ def inject_css() -> None:
                 font-size: .9rem;
                 color: #66758a;
             }
-            .recipe-card {
-                background: rgba(255,255,255,.96);
-                border: 1px solid rgba(30,58,95,.08);
-                border-radius: 22px;
-                padding: 1rem 1rem .8rem 1rem;
-                box-shadow: 0 10px 26px rgba(30,58,95,.06);
-                min-height: 385px;
-                margin-bottom: 1rem;
-            }
-            .recipe-title {
-                font-size: 1.65rem;
-                line-height: 1.15;
-                font-weight: 700;
-                color: #1b3256;
-                margin-bottom: .35rem;
-            }
-            .recipe-meta {
-                font-size: .94rem;
-                color: #6b7a90;
-                margin-bottom: .75rem;
-            }
-            .section-label {
-                color: #66758a;
-                font-size: 1rem;
-                font-weight: 600;
-                margin-top: .4rem;
-                margin-bottom: .3rem;
-            }
-            .recipe-preview {
-                color: #30445f;
-                font-size: 1.02rem;
-                min-height: 76px;
-            }
-            .recipe-note {
-                color: #6a7990;
-                font-style: italic;
-                margin-top: .65rem;
-                min-height: 40px;
-            }
-            .heart {
-                color: #f4b400;
-                font-size: 1.2rem;
-                font-weight: 700;
-                float: right;
-                margin-top: -.1rem;
+            .stTextInput input,
+            .stTextArea textarea,
+            .stSelectbox div[data-baseweb="select"] > div,
+            .stMultiSelect div[data-baseweb="select"] > div {
+                border-radius: 14px !important;
             }
             .stButton > button {
                 border-radius: 999px;
-                border: none;
-                padding: .65rem 1.15rem;
                 font-weight: 600;
-                box-shadow: 0 8px 20px rgba(59,130,246,.18);
-            }
-            .stTextInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] > div {
-                border-radius: 14px !important;
-            }
-            .sidebar-note {
-                color: #6a7990;
-                font-size: .93rem;
             }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
+
+def normalize_bool(value) -> bool:
+    return str(value).strip().lower() in {"true", "1", "yes", "y"}
+
+
+def normalize_tags(tags_value: str) -> str:
+    if pd.isna(tags_value):
+        return ""
+    parts = [t.strip().lower() for t in str(tags_value).split(",") if t.strip()]
+    deduped = []
+    for part in parts:
+        if part not in deduped:
+            deduped.append(part)
+    return ", ".join(deduped)
+
+
+def ensure_data_file():
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    if not DATA_FILE.exists():
+        pd.DataFrame(columns=RECIPE_COLUMNS).to_csv(DATA_FILE, index=False)
+
+
+@st.cache_data(ttl=10)
+def load_recipes():
+    ensure_data_file()
+    df = pd.read_csv(DATA_FILE)
+    for col in RECIPE_COLUMNS:
+        if col not in df.columns:
+            df[col] = ""
+    df = df[RECIPE_COLUMNS].fillna("")
+    df["tags"] = df["tags"].apply(normalize_tags)
+    return df
+
+
+def backup_file():
+    if DATA_FILE.exists():
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        shutil.copy2(DATA_FILE, BACKUP_DIR / f"recipes_backup_{timestamp}.csv")
+
+
+def save_recipes(df):
+    ensure_data_file()
+    backup_file()
+    out = df.copy()
+    out["favorite"] = out["favorite"].apply(lambda x: "TRUE" if normalize_bool(x) else "FALSE")
+    out["tags"] = out["tags"].apply(normalize_tags)
+    out.to_csv(DATA_FILE, index=False)
+    load_recipes.clear()
+
+
+def stars(rating):
+    try:
+        rating = int(float(rating))
+    except Exception:
+        return ""
+    rating = max(0, min(5, rating))
+    return "★" * rating + "☆" * (5 - rating) if rating else ""
+
+
+def get_all_tags(df):
+    tags = set(DEFAULT_TAGS)
+    if "tags" in df.columns:
+        for value in df["tags"].tolist():
+            for t in str(value).split(","):
+                cleaned = t.strip().lower()
+                if cleaned:
+                    tags.add(cleaned)
+    return sorted(tags)
+
+
+def preview_text(text, limit=135):
+    text = str(text).strip().replace("\n", " ")
+    return text if len(text) <= limit else text[:limit].rstrip() + "..."
+
+
+def clean_html_text(text):
+    text = str(text)
+    for junk in [
+        '<div class="section-label">Ingredients</div>',
+        '<div class="section-label">Instructions</div>',
+        '<div class="preview-text">',
+        "</div>",
+    ]:
+        text = text.replace(junk, "")
+    return text.strip()
+
+
 def render_header():
-    left, right = st.columns([5, 1.5], vertical_alignment="center")
+    left, right = st.columns([5, 1.8], vertical_alignment="center")
     with left:
         st.markdown('<div class="hero">', unsafe_allow_html=True)
-        h1, h2 = st.columns([1.2, 5], vertical_alignment="center")
-        with h1:
-            if LOGO_FILE.exists():
-                st.image(str(LOGO_FILE), use_container_width=True)
-        with h2:
-            st.markdown(f"<h1 style='margin-bottom:.1rem;color:#1c3558;'>{APP_TITLE}</h1>", unsafe_allow_html=True)
-            st.markdown(f"<div style='font-size:1.25rem;color:#64748b;margin-top:.15rem'>{APP_TAGLINE}</div>", unsafe_allow_html=True)
+        st.markdown(f"## {APP_TITLE}")
+        st.caption(APP_TAGLINE)
         st.markdown("</div>", unsafe_allow_html=True)
     with right:
-        st.page_link("https://github.com", label="GitHub later", icon="🔗")
+        label = "Admin unlocked" if st.session_state.get("admin") else "Browse mode"
+        detail = (
+            "Add, edit, and delete recipes below."
+            if st.session_state.get("admin")
+            else "Open any tile to view details."
+        )
+        st.markdown('<div class="hero">', unsafe_allow_html=True)
+        st.markdown(f"**{label}**")
+        st.caption(detail)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-def render_stats(df: pd.DataFrame, shown_count: int):
-    c1, c2, c3 = st.columns(3)
-    fav_count = int(df["favorite"].apply(truthy).sum()) if not df.empty else 0
-    for col, number, label in [
-        (c1, len(df), "recipes saved"),
-        (c2, shown_count, "showing now"),
-        (c3, fav_count, "favorites"),
-    ]:
+
+def render_stats(df, shown_count):
+    fav_count = int(df["favorite"].apply(normalize_bool).sum()) if not df.empty else 0
+    cols = st.columns(3)
+    stats = [(len(df), "recipes saved"), (shown_count, "showing"), (fav_count, "favorites")]
+    for col, (num, label) in zip(cols, stats):
         with col:
             st.markdown(
                 f"""
                 <div class="stat-pill">
-                    <div class="stat-number">{number}</div>
+                    <div class="stat-number">{num}</div>
                     <div class="stat-label">{label}</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
 
-def render_card(recipe: pd.Series):
-    heart = '<span class="heart">♥</span>' if truthy(recipe.get("favorite", False)) else ""
-    preview = str(recipe.get("instructions", "")).strip().split("\n")[0]
-    if len(preview) > 120:
-        preview = preview[:117] + "..."
-    note = str(recipe.get("notes", "")).strip()
-    note_html = f"<div class='recipe-note'>Recipe: {note}</div>" if note else "<div class='recipe-note'>&nbsp;</div>"
 
-    st.markdown(
-        f"""
-        <div class="recipe-card">
-            <div class="recipe-title">{recipe.get("recipe_name","")}{heart}</div>
-            <div class="recipe-meta">{recipe.get("category","Uncategorized")} • {recipe.get("prep_time","")} </div>
-            <div class="section-label">Ingredients</div>
-            <div class="recipe-preview">{str(recipe.get("ingredients","")).replace(chr(10), "<br>")[:170]}{'...' if len(str(recipe.get("ingredients",""))) > 170 else ''}</div>
-            <div class="section-label">Instructions</div>
-            <div class="recipe-preview">{preview or "No instructions yet."}</div>
-            {note_html}
-        </div>
-        """,
-        unsafe_allow_html=True,
+def render_recipe_tile(recipe):
+    with st.container(border=True):
+        top_left, top_right = st.columns([4, 1])
+        with top_left:
+            st.markdown(f"### {recipe.get('recipe_name', 'Untitled Recipe')}")
+            meta = f"{recipe.get('category', 'Uncategorized')} • {recipe.get('prep_time', '')}"
+            st.caption(meta)
+        with top_right:
+            rating_text = stars(recipe.get("rating", ""))
+            if rating_text:
+                st.markdown(f"**{rating_text}**")
+            if normalize_bool(recipe.get("favorite", False)):
+                st.markdown("**♥ Favorite**")
+
+        tags = [t.strip() for t in str(recipe.get("tags", "")).split(",") if t.strip()]
+        if tags:
+            st.caption(" • ".join(tags[:4]))
+
+        ingredients_preview = preview_text(clean_html_text(recipe.get("ingredients", "")), 120)
+        instructions_preview = preview_text(clean_html_text(recipe.get("instructions", "")), 125)
+
+        st.markdown("**Ingredients**")
+        st.write(ingredients_preview or "No ingredients yet.")
+        st.markdown("**Instructions**")
+        st.write(instructions_preview or "No instructions yet.")
+
+
+def admin_login():
+    if "admin" not in st.session_state:
+        st.session_state.admin = False
+
+    with st.sidebar:
+        st.markdown("## Admin")
+        if st.session_state.admin:
+            st.success("Admin unlocked")
+            if st.button("Log out", use_container_width=True):
+                st.session_state.admin = False
+                st.rerun()
+        else:
+            password = st.text_input("Password", type="password")
+            if st.button("Unlock admin", use_container_width=True):
+                if password == st.secrets.get("admin_password"):
+                    st.session_state.admin = True
+                    st.rerun()
+                else:
+                    st.error("Wrong password")
+
+
+def build_filters(df):
+    st.markdown('<div class="soft-panel">', unsafe_allow_html=True)
+    c1, c2, c3, c4 = st.columns([2.4, 1.2, 1.5, 1])
+
+    with c1:
+        search = st.text_input("Search", placeholder="Search by recipe name, ingredient, note, or tag")
+    with c2:
+        categories = ["All"] + sorted([c for c in df["category"].astype(str).unique().tolist() if c.strip()])
+        category = st.selectbox("Category", categories)
+    with c3:
+        all_tags = ["All"] + get_all_tags(df)
+        tag = st.selectbox("Tag", all_tags)
+    with c4:
+        favorites_only = st.checkbox("Favorites")
+
+    st.markdown("</div>", unsafe_allow_html=True)
+    return search, category, tag, favorites_only
+
+
+def filter_recipes(df, search, category, tag, favorites_only):
+    filtered = df.copy()
+
+    if search:
+        term = search.lower()
+        filtered = filtered[
+            filtered.apply(lambda row: term in " ".join(map(str, row.values)).lower(), axis=1)
+        ]
+
+    if category != "All":
+        filtered = filtered[filtered["category"].astype(str) == category]
+
+    if tag != "All":
+        filtered = filtered[
+            filtered["tags"].astype(str).str.lower().apply(
+                lambda v: tag.lower() in [x.strip() for x in v.split(",") if x.strip()]
+            )
+        ]
+
+    if favorites_only:
+        filtered = filtered[filtered["favorite"].apply(normalize_bool)]
+
+    sort_rating = pd.to_numeric(filtered["rating"], errors="coerce").fillna(0)
+    filtered = (
+        filtered.assign(_sort_rating=sort_rating)
+        .sort_values(by=["favorite", "_sort_rating", "recipe_name"], ascending=[False, False, True])
+        .drop(columns="_sort_rating")
     )
 
-df = init_data()
+    return filtered
+
+
+def parse_multiselect_tags(selected_tags, manual_tags):
+    parts = [t.strip().lower() for t in selected_tags if t.strip()]
+    if manual_tags.strip():
+        parts.extend([t.strip().lower() for t in manual_tags.split(",") if t.strip()])
+
+    deduped = []
+    for part in parts:
+        if part not in deduped:
+            deduped.append(part)
+
+    return ", ".join(deduped)
+
+
+def admin_forms(recipes_df):
+    st.divider()
+    st.markdown("## Admin")
+    tab1, tab2 = st.tabs(["Add recipe", "Edit recipe"])
+    all_tags = get_all_tags(recipes_df)
+
+    with tab1:
+        with st.form("add_form", clear_on_submit=True):
+            a, b, c = st.columns([2.2, 1.2, 1])
+            with a:
+                recipe_name = st.text_input("Recipe name*")
+            with b:
+                category = st.text_input("Category")
+            with c:
+                prep_time = st.text_input("Prep time", placeholder="20 min")
+
+            d, e = st.columns(2)
+            with d:
+                rating = st.selectbox("Rating", ["", "1", "2", "3", "4", "5"])
+            with e:
+                favorite = st.checkbox("Favorite")
+
+            tags_selected = st.multiselect("Tags", all_tags)
+            tags_manual = st.text_input("Add custom tags", placeholder="asian, indian, quick")
+
+            ingredients = st.text_area("Ingredients", height=180)
+            instructions = st.text_area("Instructions", height=200)
+            notes = st.text_area("Notes", height=120)
+            source_link = st.text_input("Source link")
+
+            submitted = st.form_submit_button("Save recipe", use_container_width=True)
+
+            if submitted:
+                if not recipe_name.strip():
+                    st.error("Recipe name is required.")
+                else:
+                    new_row = pd.DataFrame(
+                        [
+                            {
+                                "recipe_name": recipe_name.strip(),
+                                "category": category.strip(),
+                                "prep_time": prep_time.strip(),
+                                "ingredients": ingredients.strip(),
+                                "instructions": instructions.strip(),
+                                "notes": notes.strip(),
+                                "favorite": favorite,
+                                "source_link": source_link.strip(),
+                                "rating": rating,
+                                "tags": parse_multiselect_tags(tags_selected, tags_manual),
+                            }
+                        ]
+                    )
+                    updated = pd.concat([recipes_df, new_row], ignore_index=True)
+                    save_recipes(updated)
+                    st.success("Recipe added.")
+                    st.rerun()
+
+    with tab2:
+        if recipes_df.empty:
+            st.info("No recipes to edit yet.")
+        else:
+            labels = recipes_df["recipe_name"].fillna("").astype(str).tolist()
+            selected_recipe = st.selectbox("Choose recipe", labels)
+            idx = recipes_df.index[recipes_df["recipe_name"].astype(str) == selected_recipe][0]
+            current = recipes_df.loc[idx]
+
+            current_tags = [t.strip() for t in str(current.get("tags", "")).split(",") if t.strip()]
+            current_tags_in_list = [t for t in current_tags if t in all_tags]
+            current_custom_tags = ", ".join([t for t in current_tags if t not in all_tags])
+
+            with st.form("edit_form"):
+                a, b, c = st.columns([2.2, 1.2, 1])
+                with a:
+                    recipe_name = st.text_input("Recipe name*", value=current.get("recipe_name", ""))
+                with b:
+                    category = st.text_input("Category", value=current.get("category", ""))
+                with c:
+                    prep_time = st.text_input("Prep time", value=current.get("prep_time", ""))
+
+                d, e = st.columns(2)
+                with d:
+                    rating_options = ["", "1", "2", "3", "4", "5"]
+                    current_rating = str(current.get("rating", ""))
+                    rating = st.selectbox(
+                        "Rating",
+                        rating_options,
+                        index=rating_options.index(current_rating) if current_rating in rating_options else 0,
+                    )
+                with e:
+                    favorite = st.checkbox("Favorite", value=normalize_bool(current.get("favorite", False)))
+
+                tags_selected = st.multiselect("Tags", all_tags, default=current_tags_in_list)
+                tags_manual = st.text_input("Add custom tags", value=current_custom_tags)
+
+                ingredients = st.text_area("Ingredients", value=clean_html_text(current.get("ingredients", "")), height=180)
+                instructions = st.text_area("Instructions", value=clean_html_text(current.get("instructions", "")), height=200)
+                notes = st.text_area("Notes", value=current.get("notes", ""), height=120)
+                source_link = st.text_input("Source link", value=current.get("source_link", ""))
+
+                x, y = st.columns(2)
+                save = x.form_submit_button("Update recipe", use_container_width=True)
+                delete = y.form_submit_button("Delete recipe", use_container_width=True)
+
+                if save:
+                    recipes_df.at[idx, "recipe_name"] = recipe_name.strip()
+                    recipes_df.at[idx, "category"] = category.strip()
+                    recipes_df.at[idx, "prep_time"] = prep_time.strip()
+                    recipes_df.at[idx, "rating"] = rating
+                    recipes_df.at[idx, "favorite"] = favorite
+                    recipes_df.at[idx, "tags"] = parse_multiselect_tags(tags_selected, tags_manual)
+                    recipes_df.at[idx, "ingredients"] = ingredients.strip()
+                    recipes_df.at[idx, "instructions"] = instructions.strip()
+                    recipes_df.at[idx, "notes"] = notes.strip()
+                    recipes_df.at[idx, "source_link"] = source_link.strip()
+                    save_recipes(recipes_df)
+                    st.success("Recipe updated.")
+                    st.rerun()
+
+                if delete:
+                    recipes_df = recipes_df.drop(index=idx).reset_index(drop=True)
+                    save_recipes(recipes_df)
+                    st.success("Recipe deleted.")
+                    st.rerun()
+
+
 inject_css()
+admin_login()
+recipes = load_recipes()
 
 with st.sidebar:
-    st.markdown("## 📖 Recipe Box")
-    st.markdown('<div class="sidebar-note">A clean place to keep your favorite plant-based recipes.</div>', unsafe_allow_html=True)
-    page = st.radio("Navigate", ["Browse", "Add Recipe", "Edit Recipe"], label_visibility="visible")
-    category_options = ["All"] + sorted([c for c in df["category"].astype(str).unique().tolist() if c.strip()])
-    category_filter = st.selectbox("Category filter", category_options, index=0)
-    favorites_only = st.checkbox("Favorites only")
-    st.divider()
-    st.caption("When you're happy with it, upload this folder to GitHub and deploy on Streamlit Community Cloud.")
+    st.markdown("## Browse")
+    st.caption("Filter recipes and tap a tile for details.")
+    if st.button("Refresh recipes", use_container_width=True):
+        load_recipes.clear()
+        st.rerun()
 
 render_header()
+search, category, tag, favorites_only = build_filters(recipes)
+filtered = filter_recipes(recipes, search, category, tag, favorites_only)
+render_stats(recipes, len(filtered))
+st.markdown("<div style='height:.6rem;'></div>", unsafe_allow_html=True)
 
-if page == "Browse":
-    st.markdown('<div class="search-wrap">', unsafe_allow_html=True)
-    search_text = st.text_input("Search recipes", placeholder="Search recipes...", label_visibility="collapsed")
-    st.markdown('</div>', unsafe_allow_html=True)
+if filtered.empty:
+    st.info("No recipes match your filters.")
+else:
+    cols = st.columns(3)
+    for i, (_, recipe) in enumerate(filtered.iterrows()):
+        with cols[i % 3]:
+            render_recipe_tile(recipe)
+            with st.expander("Open recipe"):
+                top1, top2 = st.columns([2, 1])
+                with top1:
+                    st.markdown(f"### {recipe.get('recipe_name', '')}")
+                    st.caption(f"{recipe.get('category', '')} • {recipe.get('prep_time', '')}")
+                with top2:
+                    if str(recipe.get("rating", "")).strip():
+                        st.markdown(f"**Rating:** {stars(recipe.get('rating', ''))}")
+                    if normalize_bool(recipe.get("favorite", False)):
+                        st.markdown("**Favorite** ♥")
+                if str(recipe.get("tags", "")).strip():
+                    st.markdown("**Tags:** " + recipe.get("tags", ""))
+                st.markdown("**Ingredients**")
+                st.text(clean_html_text(recipe.get("ingredients", "")))
+                st.markdown("**Instructions**")
+                st.text(clean_html_text(recipe.get("instructions", "")))
+                if str(recipe.get("notes", "")).strip():
+                    st.markdown("**Notes**")
+                    st.write(recipe.get("notes", ""))
+                if str(recipe.get("source_link", "")).strip():
+                    st.link_button("Open source", recipe.get("source_link", ""))
 
-    filtered = df.copy()
-    if category_filter != "All":
-        filtered = filtered[filtered["category"].astype(str) == category_filter]
-    if favorites_only:
-        filtered = filtered[filtered["favorite"].apply(truthy)]
-    filtered = filtered[filtered.apply(lambda row: matches_search(row, search_text), axis=1)]
-    filtered = filtered.sort_values(by=["favorite", "recipe_name"], ascending=[False, True])
-
-    render_stats(df, len(filtered))
-    st.markdown("<div style='height:.75rem'></div>", unsafe_allow_html=True)
-
-    if filtered.empty:
-        st.info("No recipes match your search yet.")
-    else:
-        cols = st.columns(3)
-        for idx, (_, recipe) in enumerate(filtered.iterrows()):
-            with cols[idx % 3]:
-                render_card(recipe)
-                with st.expander("View full recipe"):
-                    st.markdown("### Ingredients")
-                    st.text(recipe.get("ingredients", ""))
-                    st.markdown("### Instructions")
-                    st.text(recipe.get("instructions", ""))
-                    if str(recipe.get("notes", "")).strip():
-                        st.markdown("### Notes")
-                        st.write(recipe.get("notes", ""))
-                    if str(recipe.get("source_link", "")).strip():
-                        st.link_button("Open source", recipe.get("source_link", ""))
-
-elif page == "Add Recipe":
-    st.subheader("Add a new recipe")
-    with st.form("add_recipe_form", clear_on_submit=True):
-        c1, c2 = st.columns([2, 1])
-        with c1:
-            recipe_name = st.text_input("Recipe name*")
-        with c2:
-            category = st.text_input("Category", placeholder="Dinner")
-        c3, c4 = st.columns(2)
-        with c3:
-            prep_time = st.text_input("Prep time", placeholder="20 min")
-        with c4:
-            favorite = st.checkbox("Favorite")
-        ingredients = st.text_area("Ingredients", height=180, placeholder="1 can chickpeas\n2 tbsp vegan mayo\n...")
-        instructions = st.text_area("Instructions", height=200, placeholder="1. Mash the chickpeas...\n2. Mix everything together...")
-        notes = st.text_area("Notes", height=110, placeholder="Anything you want to remember next time.")
-        source_link = st.text_input("Source link", placeholder="https://...")
-        submitted = st.form_submit_button("Save recipe", use_container_width=True)
-
-        if submitted:
-            if not recipe_name.strip():
-                st.error("Recipe name is required.")
-            else:
-                new_row = {
-                    "id": next_id(df),
-                    "date_added": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "recipe_name": recipe_name.strip(),
-                    "ingredients": ingredients.strip(),
-                    "instructions": instructions.strip(),
-                    "notes": notes.strip(),
-                    "favorite": favorite,
-                    "category": category.strip(),
-                    "prep_time": prep_time.strip(),
-                    "source_link": source_link.strip(),
-                }
-                df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-                save_data(df)
-                st.success("Recipe saved. Head to Browse to see it in your recipe box.")
-                st.rerun()
-
-elif page == "Edit Recipe":
-    st.subheader("Edit a saved recipe")
-    if df.empty:
-        st.info("No recipes to edit yet.")
-    else:
-        labels = (df["recipe_name"].astype(str) + " — ID " + df["id"].astype(str)).tolist()
-        selected_label = st.selectbox("Choose a recipe", labels)
-        selected_id = int(selected_label.split(" — ID ")[-1])
-        idx = df.index[pd.to_numeric(df["id"], errors="coerce") == selected_id][0]
-        current = df.loc[idx]
-
-        with st.form("edit_recipe_form"):
-            c1, c2 = st.columns([2, 1])
-            with c1:
-                recipe_name = st.text_input("Recipe name*", value=current.get("recipe_name", ""))
-            with c2:
-                category = st.text_input("Category", value=current.get("category", ""))
-            c3, c4 = st.columns(2)
-            with c3:
-                prep_time = st.text_input("Prep time", value=current.get("prep_time", ""))
-            with c4:
-                favorite = st.checkbox("Favorite", value=truthy(current.get("favorite", False)))
-            ingredients = st.text_area("Ingredients", value=current.get("ingredients", ""), height=180)
-            instructions = st.text_area("Instructions", value=current.get("instructions", ""), height=200)
-            notes = st.text_area("Notes", value=current.get("notes", ""), height=110)
-            source_link = st.text_input("Source link", value=current.get("source_link", ""))
-            saved = st.form_submit_button("Update recipe", use_container_width=True)
-
-            if saved:
-                df.at[idx, "recipe_name"] = recipe_name.strip()
-                df.at[idx, "category"] = category.strip()
-                df.at[idx, "prep_time"] = prep_time.strip()
-                df.at[idx, "favorite"] = favorite
-                df.at[idx, "ingredients"] = ingredients.strip()
-                df.at[idx, "instructions"] = instructions.strip()
-                df.at[idx, "notes"] = notes.strip()
-                df.at[idx, "source_link"] = source_link.strip()
-                save_data(df)
-                st.success("Recipe updated.")
-                st.rerun()
+if st.session_state.get("admin"):
+    admin_forms(recipes)
